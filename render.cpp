@@ -75,10 +75,11 @@ private:
 class StreamReader
 {
 public:
+	StreamReader(): inputStream(DEVICE_FILE) {};
+
 	Scene readFrame()
 	{
 		state = ErrorState;
-		ifstream inputStream(DEVICE_FILE);
 		unsigned char byte;
 		Vector3DData vector3d;
 		VectorLengthData length;
@@ -174,6 +175,7 @@ private:
 		FinishedState
 	};
 	State state;
+	ifstream inputStream;
 };
 
 StreamReader reader;
@@ -228,6 +230,7 @@ int main(int argc, char *argv[])
 	glutInit(&argc, argv);
 	glutCreateWindow("Render");
 	glutDisplayFunc(onDisplay);
+	glutIdleFunc(onDisplay);
 	glutReshapeFunc(onResize);
 	glutMainLoop();
 }
