@@ -18,7 +18,7 @@ def get_scene_data():
 		if object.type != "MESH":
 			continue
 		matrix_world = object.matrix_world
-		mesh = object.to_mesh(bpy.context.scene, False, settings = 'PREVIEW')
+		mesh = object.to_mesh(bpy.context.scene, True, settings = 'PREVIEW')
 		vertices = list(mesh.vertices)
 		for edge in mesh.edges:
 			for vertice_idx in edge.vertices:
