@@ -217,6 +217,36 @@ void onResize(int w, int h)
 	glTranslatef(0, -1080, 0);
 }
 
+void drawLine(int x0, int y0, int x1, int y1)
+{
+	int dx = (x1 - x0);
+	int dy = (y1 - y0);
+	if (dx < 0) {
+		dx = -dx;
+	}
+	if (dy < 0) {
+		dy = -dy;
+	}
+	int err = dx - dy;
+
+	int sx = (x0 < x1) ? 1 : -1;
+	int sy = (y0 < y1) ? 1 : -1;
+
+	while (x0 != x1 || y0 != y1) {
+		glVertex2i(x0, y0);
+		int e2 = err << 1;
+		if (e2 > -dy) {
+			err = err - dy;
+			x0 = x0 + sx;
+		}
+		else {
+			err = err + dx;
+			y0 = y0 + sy;
+		}
+	}
+	glVertex2i(x0, y0);
+}
+
 void onDisplay()
 {
 	Scene scene = reader.readFrame();
@@ -230,7 +260,7 @@ void onDisplay()
 
 	glClear(GL_COLOR_BUFFER_BIT);
 	glColor3f(1.0, 1.0, 1.0);
-	glBegin(GL_LINES);
+	glBegin(GL_POINTS);
 	for (Scene::VectorList::const_iterator it = scene.begin(); it != scene.end(); ++it) {
 		vec[0] = it->x;
 		vec[1] = it->y;
@@ -273,8 +303,9 @@ void onDisplay()
 					transEnd[COORD_Z] = 0;
 				}
 
-				glVertex2i(transBegin[COORD_X], transBegin[COORD_Y]);
-				glVertex2i(transEnd[COORD_X], transEnd[COORD_Y]);
+				//glVertex2i(transBegin[COORD_X], transBegin[COORD_Y]);
+				//glVertex2i(transEnd[COORD_X], transEnd[COORD_Y]);
+				drawLine(transBegin[COORD_X], transBegin[COORD_Y], transEnd[COORD_X], transEnd[COORD_Y]);
 			}
 		}
 		beginLine = !beginLine;
