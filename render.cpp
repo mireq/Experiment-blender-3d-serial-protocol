@@ -38,6 +38,14 @@ struct VectorLengthData {
 	uint16_t length() {
 		return data[0];
 	}
+	bool isCamera() {
+		if (data[0] == 0x0080 & data[1] == 0 && data[2] == 0 && data[3] == 0 && data[4] == 0 && data[5] == 0 && ecc == 0) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
 };
 
 class Scene {
@@ -79,18 +87,15 @@ private:
 class StreamReader
 {
 public:
-	StreamReader(): inputStream(DEVICE_FILE) {};
+	StreamReader(): state(ErrorState), inputStream(DEVICE_FILE) {};
 
 	Scene readFrame()
 	{
-		state = ErrorState;
 		unsigned char byte;
 		Vector3DData vector3d;
 		VectorLengthData length;
 		size_t streamPos= 0;
-
 		GLfloat projectionMatrix[16];
-		vector<GLVector3D> lines;
 
 
 		while (!inputStream.bad()) {
@@ -139,14 +144,25 @@ public:
 					}
 					break;
 				case VectorLengthState:
-					lines.resize(length.length() * 2);
-					if (length.length() == 0) {
-						state = FinishedState;
+					// Namiesto vektorov nasleduje zase kamera
+					if (length.isCamera()) {
+						state = CameraDataState;
+						streamPos= 0;
+						Scene scene;
+						scene.setLines(lines);
+						scene.setProjectionMatrix(projectionMatrix);
+						return scene;
 					}
 					else {
-						state = VectorDataState;
+						lines.resize(length.length() * 2);
+						if (length.length() == 0) {
+							state = FinishedState;
+						}
+						else {
+							state = VectorDataState;
+						}
+						streamPos = 0;
 					}
-					streamPos = 0;
 					break;
 				case VectorDataState:
 					lines[streamPos].x = vector3d.data[0];
@@ -185,6 +201,7 @@ private:
 	};
 	State state;
 	ifstream inputStream;
+	vector<GLVector3D> lines;
 };
 
 StreamReader reader;

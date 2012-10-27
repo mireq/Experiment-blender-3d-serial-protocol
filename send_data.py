@@ -7,14 +7,11 @@ from mathutils import Matrix, Vector
 
 device = "/home/mirec/serial"
 
-def get_scene_data():
+def get_vector_data():
 	vector_data = []
 
-	camera = None
 	objects = bpy.data.objects
 	for object in objects:
-		if object.type == "CAMERA":
-			camera = object
 		if object.type != "MESH":
 			continue
 		matrix_world = object.matrix_world
@@ -31,7 +28,10 @@ def get_scene_data():
 	edge_count = len(vector_data) >> 5 # 2^4 - vector size, 2^5 - edge size
 	edge_count_pack = struct.pack("<H", edge_count & 0x7fff) + (10 * b"\x00")
 	vector_data = edge_count_pack + struct.pack("<L", binascii.crc32(edge_count_pack)) + vector_data
+	return vector_data
 
+def get_camera_data():
+	camera = bpy.data.objects['Camera']
 	w = 1920
 	h = 1080
 	RT = camera.matrix_world.inverted()
@@ -61,16 +61,26 @@ def get_scene_data():
 			data = struct.pack("<3f", TM[row][2], TM[row][3], 0.0)
 		camera_data += (data + struct.pack("<L", binascii.crc32(data)))
 
-	return camera_data + vector_data
+	return camera_data
 
 f = open(device, "wb")
 #f.write(camera_data + vector_data)
 
 def write_scene():
+	time.sleep(1.0)
+	scene_data = get_camera_data() + get_vector_data()
+	f.write(scene_data)
+	f.flush()
+	i = -1
 	while True:
-		scene_data = get_scene_data()
+		if i % 100 == 0:
+			scene_data = get_camera_data() + get_vector_data()
+		else:
+			scene_data = get_camera_data()
 		f.write(scene_data)
-		time.sleep(0.1)
+		f.flush()
+		time.sleep(0.05)
+		i += 1
 
 t = threading.Thread(target = write_scene)
 t.start()
