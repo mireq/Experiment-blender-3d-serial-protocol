@@ -13,11 +13,18 @@
 #include <fstream>
 #include <vector>
 
-#define DEVICE_FILE "/home/mirec/serial"
-
 #define COORD_X 0
 #define COORD_Y 1
 #define COORD_Z 2
+
+#define LINE_INSIDE 0 // 0000
+#define LINE_LEFT 1   // 0001
+#define LINE_RIGHT 2  // 0010
+#define LINE_BOTTOM 4 // 0100
+#define LINE_TOP 8    // 1000
+
+#define WIDTH 1368
+#define HEIGHT 768
 
 using namespace std;
 
@@ -47,6 +54,11 @@ struct VectorLengthData {
 		}
 	}
 };
+
+inline void putPixel(int x, int y)
+{
+	glVertex2i(x, y);
+}
 
 class Scene {
 public:
@@ -87,7 +99,7 @@ private:
 class StreamReader
 {
 public:
-	StreamReader(): state(ErrorState), inputStream(DEVICE_FILE) {};
+	StreamReader(): state(ErrorState) {};
 
 	Scene readFrame()
 	{
@@ -98,17 +110,17 @@ public:
 		GLfloat projectionMatrix[16];
 
 
-		while (!inputStream.bad()) {
+		while (!cin.bad()) {
 			if (state == CameraDataState || state == VectorDataState) {
-				inputStream.read((char *)&vector3d, sizeof(vector3d));
+				cin.read((char *)&vector3d, sizeof(vector3d));
 			}
 			else if (state == VectorLengthState) {
-				inputStream.read((char *)&length, sizeof(length));
+				cin.read((char *)&length, sizeof(length));
 			}
 			else {
-				inputStream.read((char *)&byte, sizeof(byte));
+				cin.read((char *)&byte, sizeof(byte));
 			}
-			if (inputStream.eof()) {
+			if (cin.eof()) {
 				state = ErrorState;
 				break;
 			}
@@ -212,13 +224,85 @@ void onResize(int w, int h)
 	glViewport(0, 0, w, h);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho(0, 1920, 0, 1080, -1, 1);
+	glOrtho(0, WIDTH, 0, HEIGHT, -1, 1);
 	glScalef(1, -1, 1);
-	glTranslatef(0, -1080, 0);
+	glTranslatef(0, -HEIGHT, 0);
+}
+
+// Cohen–Sutherland
+int computeOutCode(int x, int y)
+{
+	int code;
+	code = LINE_INSIDE;
+	if (x < 0) {
+		code |= LINE_LEFT;
+	}
+	else if (x >= WIDTH) {
+		code |= LINE_RIGHT;
+	}
+	if (y < 0) {
+		code |= LINE_BOTTOM;
+	}
+	else if (y >= HEIGHT) {
+		code |= LINE_TOP;
+	}
+	return code;
+}
+
+bool cropLine(int &x0, int &y0, int &x1, int &y1)
+{
+	bool accept = false;
+	int outcode0 = computeOutCode(x0, y0);
+	int outcode1 = computeOutCode(x1, y1);
+	while (true) {
+		if (!(outcode0 | outcode1)) { // v oblasti
+			accept = true;
+			break;
+		}
+		else if (outcode0 & outcode1) { // Mimo
+			accept = false;
+			break;
+		}
+		else {
+			int x, y;
+			int outcodeOut = outcode0 ? outcode0 : outcode1;
+			if (outcodeOut & LINE_TOP) {
+				x = x0 + (x1 - x0) * ((HEIGHT - 1) - y0) / (y1 - y0);
+				y = (HEIGHT - 1);
+			}
+			else if (outcodeOut & LINE_BOTTOM) {
+				x = x0 + (x1 - x0) * (0 - y0) / (y1 - y0);
+				y = 0;
+			}
+			else if (outcodeOut & LINE_RIGHT) {
+				y = y0 + (y1 - y0) * ((WIDTH - 1) - x0) / (x1 - x0);
+				x = (WIDTH - 1);
+			}
+			else if (outcodeOut & LINE_LEFT) {
+				y = y0 + (y1 - y0) * (0 - x0) / (x1 - x0);
+				x = 0;
+			}
+
+			if (outcodeOut == outcode0) {
+				x0 = x;
+				y0 = y;
+				outcode0 = computeOutCode(x0, y0);
+			}
+			else {
+				x1 = x;
+				y1 = y;
+				outcode1 = computeOutCode(x1, y1);
+			}
+		}
+	}
+	return accept;
 }
 
 void drawLine(int x0, int y0, int x1, int y1)
 {
+	if (!cropLine(x0, y0, x1, y1)) {
+		return;
+	}
 	int dx = (x1 - x0);
 	int dy = (y1 - y0);
 	if (dx < 0) {
@@ -244,7 +328,7 @@ void drawLine(int x0, int y0, int x1, int y1)
 			y0 = y0 + sy;
 		}
 	}
-	glVertex2i(x0, y0);
+	putPixel(x0, y0);
 }
 
 void onDisplay()
@@ -303,8 +387,6 @@ void onDisplay()
 					transEnd[COORD_Z] = 0;
 				}
 
-				//glVertex2i(transBegin[COORD_X], transBegin[COORD_Y]);
-				//glVertex2i(transEnd[COORD_X], transEnd[COORD_Y]);
 				drawLine(transBegin[COORD_X], transBegin[COORD_Y], transEnd[COORD_X], transEnd[COORD_Y]);
 			}
 		}
