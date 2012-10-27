@@ -199,7 +199,7 @@ void onDisplay()
 	GLfloat trans[4];
 
 	glClear(GL_COLOR_BUFFER_BIT);
-	glColor3f(0.3, 0.3, 0.3);
+	glColor3f(1.0, 1.0, 1.0);
 	glBegin(GL_LINES);
 	for (Scene::VectorList::const_iterator it = scene.begin(); it != scene.end(); ++it) {
 		vec[0] = it->x;
@@ -227,6 +227,7 @@ void onDisplay()
 int main(int argc, char *argv[])
 {
 	scene = reader.readFrame();
+	glutInitWindowSize(480, 270);
 	glutInit(&argc, argv);
 	glutCreateWindow("Render");
 	glutDisplayFunc(onDisplay);
