@@ -136,7 +136,12 @@ public:
 					break;
 				case VectorLengthState:
 					lines.resize(length.length() * 2);
-					state = VectorDataState;
+					if (length.length() == 0) {
+						state = FinishedState;
+					}
+					else {
+						state = VectorDataState;
+					}
 					streamPos = 0;
 					break;
 				case VectorDataState:
