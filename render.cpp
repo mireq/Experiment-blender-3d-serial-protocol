@@ -7,11 +7,21 @@
  * =====================================================================
  */
 
-#include <GL/glut.h>
-#include <stdint.h>
-#include <iostream>
+#include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
 #include <fstream>
+#include <iostream>
+#include <stdint.h>
 #include <vector>
+#include <sys/mman.h>
+
+#ifdef RUN_ON_PC
+#include <GL/glut.h>
+#elif RUN_ON_TV
+typedef float GLfloat;
+static void *vfb;
+#endif
 
 #define COORD_X 0
 #define COORD_Y 1
@@ -22,6 +32,12 @@
 #define LINE_RIGHT 2  // 0010
 #define LINE_BOTTOM 4 // 0100
 #define LINE_TOP 8    // 1000
+
+#define COLOR_BLACK 0x8000UL
+#define COLOR_WHITE 0x7fffUL
+
+#define FB_ADDR 0x0AC0A000UL
+#define FB_MMAP_SIZE 0x201000UL
 
 #define WIDTH 1368
 #define HEIGHT 768
@@ -55,9 +71,13 @@ struct VectorLengthData {
 	}
 };
 
-inline void putPixel(int x, int y)
+inline void putPixel(int x, int y, uint16_t color)
 {
+#ifdef RUN_ON_PC
 	glVertex2i(x, y);
+#elif RUN_ON_TV
+	static_cast<uint16_t *>(vfb)[2 * (WIDTH * y + x)] = color;
+#endif
 }
 
 class Scene {
@@ -219,6 +239,7 @@ private:
 StreamReader reader;
 Scene scene;
 
+#ifdef RUN_ON_PC
 void onResize(int w, int h)
 {
 	glViewport(0, 0, w, h);
@@ -228,6 +249,7 @@ void onResize(int w, int h)
 	glScalef(1, -1, 1);
 	glTranslatef(0, -HEIGHT, 0);
 }
+#endif
 
 // Cohen–Sutherland
 int computeOutCode(int x, int y)
@@ -317,7 +339,7 @@ void drawLine(int x0, int y0, int x1, int y1)
 	int sy = (y0 < y1) ? 1 : -1;
 
 	while (x0 != x1 || y0 != y1) {
-		glVertex2i(x0, y0);
+		putPixel(x0, y0, COLOR_BLACK);
 		int e2 = err << 1;
 		if (e2 > -dy) {
 			err = err - dy;
@@ -328,7 +350,7 @@ void drawLine(int x0, int y0, int x1, int y1)
 			y0 = y0 + sy;
 		}
 	}
-	putPixel(x0, y0);
+	putPixel(x0, y0, COLOR_BLACK);
 }
 
 void onDisplay()
@@ -342,9 +364,11 @@ void onDisplay()
 
 	bool beginLine = true;
 
+#ifdef RUN_ON_PC
 	glClear(GL_COLOR_BUFFER_BIT);
 	glColor3f(1.0, 1.0, 1.0);
 	glBegin(GL_POINTS);
+#endif
 	for (Scene::VectorList::const_iterator it = scene.begin(); it != scene.end(); ++it) {
 		vec[0] = it->x;
 		vec[1] = it->y;
@@ -387,18 +411,20 @@ void onDisplay()
 					transEnd[COORD_Z] = 0;
 				}
 
-				drawLine(transBegin[COORD_X], transBegin[COORD_Y], transEnd[COORD_X], transEnd[COORD_Y]);
+				drawLine((int)transBegin[COORD_X], (int)transBegin[COORD_Y], (int)transEnd[COORD_X], (int)transEnd[COORD_Y]);
 			}
 		}
 		beginLine = !beginLine;
 	}
+#ifdef RUN_ON_PC
 	glEnd();
 	glFlush();
+#endif
 }
 
 int main(int argc, char *argv[])
 {
-	scene = reader.readFrame();
+#ifdef RUN_ON_PC
 	glutInitWindowSize(480, 270);
 	glutInit(&argc, argv);
 	glutCreateWindow("Render");
@@ -406,4 +432,21 @@ int main(int argc, char *argv[])
 	glutIdleFunc(onDisplay);
 	glutReshapeFunc(onResize);
 	glutMainLoop();
+#elif RUN_ON_TV
+	int fd;
+	if ((fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) {
+		exit(-1);
+	}
+	vfb = mmap(0, FB_MMAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, FB_ADDR);
+	if (vfb == MAP_FAILED) {
+		exit(-1);
+	}
+	while (true) {
+		onDisplay();
+	}
+	if (munmap(vfb,FB_MMAP_SIZE) == -1) {
+		exit(-1);
+	}
+	close(fd);
+#endif
 }
