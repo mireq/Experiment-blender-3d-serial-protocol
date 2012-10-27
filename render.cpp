@@ -15,6 +15,10 @@
 
 #define DEVICE_FILE "/home/mirec/serial"
 
+#define COORD_X 0
+#define COORD_Y 1
+#define COORD_Z 2
+
 using namespace std;
 
 struct GLVector3D {
@@ -202,6 +206,10 @@ void onDisplay()
 	GLfloat *matrix = scene.projectionMatrix();
 	GLfloat vec[4];
 	GLfloat trans[4];
+	GLfloat transBegin[4];
+	GLfloat transEnd[4];
+
+	bool beginLine = true;
 
 	glClear(GL_COLOR_BUFFER_BIT);
 	glColor3f(1.0, 1.0, 1.0);
@@ -221,9 +229,38 @@ void onDisplay()
 			}
 		}
 		for (int row = 0; row < 4; ++row) {
-			trans[row] = 1.0/trans[3] * trans[row];
+			float transformed = 1.0/trans[3] * trans[row];
+			if (beginLine) {
+				transBegin[row] = transformed;
+			}
+			else {
+				transEnd[row] = transformed;
+			}
 		}
-		glVertex2i(trans[0], trans[1]);
+
+		if (!beginLine) {
+			if (transBegin[2] < 0 || transEnd[2] < 0) {
+				// Začiatok je vždy ďalej na z-osi
+				if (transBegin[2] > transEnd[2]) {
+					for (int col = 0; col < 4; ++col) {
+						trans[col] = transBegin[col];
+						transBegin[col] = transEnd[col];
+						transEnd[col] = trans[col];
+					}
+				}
+				// Z za kamerou
+				if (transEnd[COORD_Z] > 0) {
+					float factor = 1.0 - (transBegin[COORD_Z] / (transBegin[COORD_Z] - transEnd[COORD_Z]));
+					transEnd[COORD_X] = transBegin[COORD_X] + (transEnd[COORD_X] - transBegin[COORD_X]) * factor;
+					transEnd[COORD_Y] = transBegin[COORD_Y] + (transEnd[COORD_Y] - transBegin[COORD_Y]) * factor;
+					transEnd[COORD_Z] = 0;
+				}
+
+				glVertex2i(transBegin[COORD_X], transBegin[COORD_Y]);
+				glVertex2i(transEnd[COORD_X], transEnd[COORD_Y]);
+			}
+		}
+		beginLine = !beginLine;
 	}
 	glEnd();
 	glFlush();
